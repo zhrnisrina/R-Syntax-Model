@@ -10,24 +10,34 @@ format:
 # Generate Data
 ```{r}
 library(MASS)
+```
+
+```{r}
 set.seed(50)
 
-n <- 100
+n <- 200  
 p <- 10
 
+# Generate covariate matrix
 cov <- diag(p) * (1.10^2)
 mu <- rep(2.5, p)
-
 X <- mvrnorm(n, mu, cov)
 X <- data.frame(X)
 colnames(X) <- paste0("X", 1:p)
 
+# Linear & Nonlinear effects
 beta <- rep(0, p)
 beta_0 <- 2
-beta[1:10] <- 1.25
+beta[1:5] <- 1.25  # Linear relationship
+beta[6:10] <- 0.6   # Nonlinear relationship
+
+# Error term
 error <- rnorm(n, 0, 1.5)
 
-Y <- beta_0 + as.matrix(X) %*% beta + error
+# Create Y with both linear and nonlinear effects
+Y <- beta_0 + as.matrix(X[, 1:5]) %*% beta[1:5] + 
+     sin(as.matrix(X[, 6:10]) %*% beta[6:10]) + error
+
 data <- data.frame(Y, X)
 
 library(dplyr)
@@ -64,6 +74,10 @@ rsq_lm <- 1 - sum((y_test - pred_lm)^2) / sum((y_test - mean(y_test))^2)
 ## Forward Selection
 ```{r}
 library(MASS)
+```
+
+
+```{r}
 full_model <- lm(Y ~ ., data = train_data)
 null_model <- lm(Y ~ 1, data = train_data)
 
@@ -106,6 +120,10 @@ rsq_stepwise <- 1 - sum((y_test - pred_stepwise)^2) / sum((y_test - mean(y_test)
 ## Best-Subset Selection
 ```{r}
 library(leaps)
+```
+
+
+```{r}
 best_subset <- regsubsets(Y ~ ., data = train_data, nvmax = 10, really.big = TRUE)
 best_model_idx <- which.max(summary(best_subset)$adjr2)
 best_vars <- names(coef(best_subset, best_model_idx))[-1]
@@ -125,6 +143,10 @@ rsq_best_subset <- 1 - sum((y_test - pred_best_subset)^2) / sum((y_test - mean(y
 ## Ridge Regression
 ```{r}
 library(glmnet)
+```
+
+
+```{r}
 ridge <- cv.glmnet(X_train, 
                    y_train, 
                    alpha = 0, 
@@ -240,9 +262,11 @@ rsq_poly <- 1 - sum((y_test - pred_poly)^2) / sum((y_test - mean(y_test))^2)
 
 ## Fungsi Tangga 
 ```{r}
-# Load necessary library
 library(dplyr)
+```
 
+
+```{r}
 # Mean Squared Error Function
 mse <- function(model, data) {
   preds <- predict(model, newdata = data)
@@ -295,7 +319,6 @@ print(results_table, row.names = FALSE)
 
 
 ```{r}
-# Train final model with best_bins
 for (j in 1:10) {
   train_data[[paste0("X", j, "_bin")]] <- cut(train_data[[paste0("X", j)]], breaks = best_bins, labels = FALSE)
   test_data[[paste0("X", j, "_bin")]] <- cut(test_data[[paste0("X", j)]], breaks = best_bins, labels = FALSE)
@@ -317,9 +340,11 @@ rsq_piecewise <- 1 - sum((y_test - pred_piecewise)^2) / sum((y_test - mean(y_tes
 
 ## Regresi Spline
 ```{r}
-# Load library
 library(splines)
+```
 
+
+```{r}
 # Mean Squared Error Function
 mse <- function(model, data) {
   preds <- predict(model, newdata = data)
@@ -396,3 +421,251 @@ rsq_gam <- 1 - sum((y_test - pred_gam)^2) / sum((y_test - mean(y_test))^2)
 ```
 
 # Machine Learning Model
+
+## Regression Tree
+
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+
+```{r}
+# Build regression tree model
+formula_tree <- as.formula("Y ~ .")
+tree_model <- rpart(formula_tree, data = train_data, method = "anova",
+                    control = rpart.control(
+                      minsplit = 10,    # Minimum 10 data untuk split
+                      minbucket = 5,    # Minimum 5 data per leaf
+                      cp = 0.01,        # Complexity Parameter (lebih kecil = lebih kompleks)
+                      maxdepth = 5,     # Maksimal kedalaman pohon
+                      xval = 10         # Cross-validation folds
+                    ))
+
+# Visualisasi Tree
+rpart.plot(tree_model, main = "Regression Tree")
+```
+
+
+```{r}
+# Cari nilai CP terbaik dari tabel kompleksitas
+best_cp <- tree_model$cptable[which.min(tree_model$cptable[, "xerror"]), "CP"]
+
+# Prune pohon menggunakan CP terbaik
+pruned_tree <- prune(tree_model, cp = best_cp)
+
+# Visualisasi pohon setelah pruning
+rpart.plot(pruned_tree, main = "Pruned Regression Tree")
+```
+
+```{r}
+# Predict on test data
+pred_tree <- predict(tree_model, test_data)
+pred_pruned <- predict(pruned_tree, test_data)
+
+# Compute MSE
+mse_tree <- mean((y_test - pred_tree)^2)
+mse_pruned <- mean((y_test - pred_pruned)^2)
+
+# Compute R-squared
+rsq_tree <- 1 - sum((y_test - pred_tree)^2) / sum((y_test - mean(y_test))^2)
+rsq_pruned <- 1 - sum((y_test - pred_pruned)^2) / sum((y_test - mean(y_test))^2)
+```
+
+## Random Forest
+```{r}
+library(randomForest)
+```
+
+
+```{r}
+# Definisikan hyperparameter grid
+ntree_vals <- c(100, 300, 500)
+mtry_vals <- c(2, sqrt(ncol(train_data) - 1), ncol(train_data) - 1)
+nodesize_vals <- c(1, 5, 10)
+maxnodes_vals <- c(10, 30, 50)  # Menentukan jumlah maksimal leaf nodes
+maxdepth_vals <- c(5, 10, 15)   # Menentukan kedalaman maksimum pohon
+
+# Simpan hasil tuning
+results <- expand.grid(ntree = ntree_vals, mtry = mtry_vals, nodesize = nodesize_vals,
+                       maxnodes = maxnodes_vals, maxdepth = maxdepth_vals, MSE = NA)
+
+formula_rf <- as.formula("Y ~ .")
+
+# Loop untuk mencari kombinasi terbaik
+for (i in 1:nrow(results)) {
+  set.seed(123)
+  rf_tuned <- randomForest(formula_rf, data = train_data,
+                           ntree = results$ntree[i],
+                           mtry = results$mtry[i],
+                           nodesize = results$nodesize[i],
+                           maxnodes = results$maxnodes[i],
+                           maxdepth = results$maxdepth[i])
+  
+  # Prediksi di test data
+  pred_tuned <- predict(rf_tuned, test_data)
+  
+  # Hitung MSE
+  results$MSE[i] <- mean((y_test - pred_tuned)^2)
+}
+
+# Cari kombinasi terbaik
+best_params <- results[which.min(results$MSE), ]
+print(best_params)
+```
+
+```{r}
+# Gunakan hasil dari tuning
+best_ntree <- best_params$ntree
+best_mtry <- best_params$mtry
+best_nodesize <- best_params$nodesize
+best_maxnodes <- best_params$maxnodes
+best_maxdepth <- best_params$maxdepth
+
+# Definisikan formula
+formula_rf <- as.formula("Y ~ .")
+
+# Train model dengan best_params
+set.seed(123)  # Untuk reprodusibilitas
+rf_model <- randomForest(formula_rf, data = train_data,
+                         ntree = best_ntree,       # Best ntree
+                         mtry = best_mtry,        # Best mtry
+                         nodesize = best_nodesize, # Best nodesize
+                         maxnodes = best_maxnodes, # Best maxnodes
+                         sampsize = 0.8 * nrow(train_data), # Bootstrap sample size
+                         importance = TRUE)   # Melihat pentingnya variabel
+
+# Print model
+print(rf_model)
+```
+
+```{r}
+pred_rf <- predict(rf_model, test_data)
+mse_rf <- mean((y_test - pred_rf)^2)
+rsq_rf <- 1 - sum((y_test - pred_rf)^2) / sum((y_test - mean(y_test))^2)
+```
+
+```{r}
+# Plot feature importance
+varImpPlot(rf_model, main = "Feature Importance in Random Forest")
+```
+
+## AdaBoost (Klasifikasi)
+```{r}
+library(adabag)
+library(caret)
+```
+
+## GBM
+```{r}
+library(gbm)
+library(caret)
+```
+
+
+```{r}
+# Set grid untuk tuning
+tune_grid <- expand.grid(
+  n.trees = c(100, 300, 500),        # Jumlah pohon
+  interaction.depth = c(1, 3, 5),     # Kedalaman pohon
+  shrinkage = c(0.01, 0.05, 0.1),     # Learning rate
+  n.minobsinnode = c(5, 10, 15)       # Minimum sampel per daun
+)
+
+# Set kontrol cross-validation
+train_control <- trainControl(
+  method = "cv", 
+  number = 5, 
+  verboseIter = TRUE
+)
+
+# Tuning model
+set.seed(123)
+gbm_tuned <- train(
+  Y ~ ., 
+  data = train_data, 
+  method = "gbm", 
+  trControl = train_control,
+  tuneGrid = tune_grid,
+  verbose = FALSE
+)
+
+# Best hyperparameters
+best_params <- gbm_tuned$bestTune
+print(best_params)
+
+```
+
+```{r}
+set.seed(123)
+gbm_best <- gbm(
+  Y ~ ., 
+  data = train_data, 
+  distribution = "gaussian",
+  n.trees = best_params$n.trees,
+  interaction.depth = best_params$interaction.depth,
+  shrinkage = best_params$shrinkage,
+  n.minobsinnode = best_params$n.minobsinnode
+)
+```
+
+
+```{r}
+pred_gbm_best <- predict(gbm_best, newdata = test_data, n.trees = best_params$n.trees)
+mse_gbm_best <- mean((test_data$Y - pred_gbm_best)^2)
+rsq_gbm_best <- 1 - sum((test_data$Y - pred_gbm_best)^2) / sum((test_data$Y - mean(test_data$Y))^2)
+```
+
+
+## Neural Network
+```{r}
+library(nnet)
+```
+
+
+```{r}
+nn_model <- nnet(Y ~ ., data = train_data, 
+                 size = 5,  # Jumlah neuron di hidden layer
+                 linout = TRUE,  # Karena ini regresi (bukan klasifikasi)
+                 decay = 0.01,   # Regularisasi (L2 penalty)
+                 maxit = 500)    # Iterasi training
+
+summary(nn_model)
+```
+
+
+```{r}
+pred_nn <- predict(nn_model, test_data)
+mse_nn <- mean((test_data$Y - pred_nn)^2)
+rsq_nn <- 1 - sum((test_data$Y - pred_nn)^2) / sum((test_data$Y - mean(test_data$Y))^2)
+```
+
+# Summary
+```{r}
+# Membuat Data Frame Ringkasan MSE dan R-squared
+model_summary <- data.frame(
+  Model = c("Linear Regression", "Forward Selection", "Backward Elimination", 
+            "Stepwise Regression", "Best Subset Selection", "Ridge Regression", 
+            "LASSO Regression", "Elastic Net", "Polynomial Regression", 
+            "Piecewise Regression", "Spline Regression", "GAM", 
+            "Regression Tree", "Pruned Regression Tree", "Random Forest",
+            "GBM", "Neural Network"),
+  MSE = c(mse_lm, mse_forward, mse_backward, mse_stepwise, mse_best_subset, 
+          mse_ridge, mse_lasso, mse_en, mse_poly, mse_piecewise, 
+          mse_spline, mse_gam, mse_tree, mse_pruned, mse_rf, mse_gbm_best,
+          mse_nn),
+  R_squared = c(rsq_lm, rsq_forward, rsq_backward, rsq_stepwise, rsq_best_subset, 
+                rsq_ridge, rsq_lasso, rsq_en, rsq_poly, rsq_piecewise, 
+                rsq_spline, rsq_gam, rsq_tree, rsq_pruned, rsq_rf, rsq_gbm_best,
+                rsq_nn)
+)
+
+# Membulatkan hingga tiga angka di belakang koma
+model_summary$MSE <- round(model_summary$MSE, 3)
+model_summary$R_squared <- round(model_summary$R_squared, 3)
+
+# Menampilkan tabel
+print(model_summary, row.names = FALSE)
+
+```
+
