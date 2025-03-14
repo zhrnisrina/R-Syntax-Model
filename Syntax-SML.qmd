@@ -1,0 +1,398 @@
+---
+title: "Syntax Model"
+format: 
+  html:
+    embed-resources: true
+    toc: true
+    self-contained: true
+---
+
+# Generate Data
+```{r}
+library(MASS)
+set.seed(50)
+
+n <- 100
+p <- 10
+
+cov <- diag(p) * (1.10^2)
+mu <- rep(2.5, p)
+
+X <- mvrnorm(n, mu, cov)
+X <- data.frame(X)
+colnames(X) <- paste0("X", 1:p)
+
+beta <- rep(0, p)
+beta_0 <- 2
+beta[1:10] <- 1.25
+error <- rnorm(n, 0, 1.5)
+
+Y <- beta_0 + as.matrix(X) %*% beta + error
+data <- data.frame(Y, X)
+
+library(dplyr)
+glimpse(data)
+```
+
+## Train-Test Split
+```{r}
+set.seed(50)
+train_index <- sample(1:n, size = 0.8 * n, replace = FALSE)
+train_data <- data[train_index, ] 
+test_data  <- data[-train_index, ]
+
+X_train <- as.matrix(train_data[, -1])
+y_train <- train_data$Y
+X_test <- as.matrix(test_data[, -1])  
+y_test <- test_data$Y
+```
+
+# Linear Regression
+```{r}
+lm_model <- lm(Y ~ ., data = train_data)
+summary(lm_model)
+```
+
+```{r}
+pred_lm <- predict(lm_model, test_data)
+mse_lm <- mean((y_test - pred_lm)^2)
+rsq_lm <- 1 - sum((y_test - pred_lm)^2) / sum((y_test - mean(y_test))^2)
+```
+
+# Subset Selection Model
+
+## Forward Selection
+```{r}
+library(MASS)
+full_model <- lm(Y ~ ., data = train_data)
+null_model <- lm(Y ~ 1, data = train_data)
+
+step_forward <- stepAIC(null_model, scope = list(lower = null_model, upper = full_model), 
+                         direction = "forward", trace = FALSE)
+summary(step_forward)
+```
+
+```{r}
+pred_forward <- predict(step_forward, test_data)
+mse_forward <- mean((y_test - pred_forward)^2)
+rsq_forward <- 1 - sum((y_test - pred_forward)^2) / sum((y_test - mean(y_test))^2)
+```
+
+## Backward Elimination
+```{r}
+step_backward <- stepAIC(full_model, direction = "backward", trace = FALSE)
+summary(step_backward)
+```
+
+```{r}
+pred_backward <- predict(step_backward, test_data)
+mse_backward <- mean((y_test - pred_backward)^2)
+rsq_backward <- 1 - sum((y_test - pred_backward)^2) / sum((y_test - mean(y_test))^2)
+```
+
+## Stepwise Regression
+```{r}
+step_stepwise <- stepAIC(null_model, scope = list(lower = null_model, upper = full_model), 
+                          direction = "both", trace = FALSE)
+summary(step_stepwise)
+```
+
+```{r}
+pred_stepwise <- predict(step_stepwise, test_data)
+mse_stepwise <- mean((y_test - pred_stepwise)^2)
+rsq_stepwise <- 1 - sum((y_test - pred_stepwise)^2) / sum((y_test - mean(y_test))^2)
+```
+
+## Best-Subset Selection
+```{r}
+library(leaps)
+best_subset <- regsubsets(Y ~ ., data = train_data, nvmax = 10, really.big = TRUE)
+best_model_idx <- which.max(summary(best_subset)$adjr2)
+best_vars <- names(coef(best_subset, best_model_idx))[-1]
+
+best_subset_model <- lm(as.formula(paste("Y ~", paste(best_vars, collapse = " + "))), data = train_data)
+summary(best_subset_model)
+```
+
+```{r}
+pred_best_subset <- predict(best_subset_model, test_data)
+mse_best_subset <- mean((y_test - pred_best_subset)^2)
+rsq_best_subset <- 1 - sum((y_test - pred_best_subset)^2) / sum((y_test - mean(y_test))^2)
+```
+
+# Shrinkage Methods
+
+## Ridge Regression
+```{r}
+library(glmnet)
+ridge <- cv.glmnet(X_train, 
+                   y_train, 
+                   alpha = 0, 
+                   type.measure = "mse", 
+                   family = "gaussian", 
+                   nfolds = 10)
+
+best_lambda_ridge <- ridge$lambda.min ; best_lambda_ridge
+```
+
+```{r}
+pred_ridge <- predict(ridge, s = best_lambda_ridge, newx = X_test)
+mse_ridge <- mean((y_test - pred_ridge)^2)
+rsq_ridge <- 1 - sum((y_test - pred_ridge)^2) / sum((y_test - mean(y_test))^2)
+```
+
+## LASSO Regression
+```{r}
+lasso <- cv.glmnet(X_train, 
+                   y_train, 
+                   alpha = 1, 
+                   type.measure = "mse", 
+                   family = "gaussian", 
+                   nfolds = 10)
+
+best_lambda_lasso <- lasso$lambda.min ; best_lambda_lasso
+```
+
+```{r}
+pred_lasso <- predict(lasso, s = best_lambda_lasso, newx = X_test)
+mse_lasso <- mean((y_test - pred_lasso)^2)
+rsq_lasso <- 1 - sum((y_test - pred_lasso)^2) / sum((y_test - mean(y_test))^2)
+```
+
+## Elastic Net
+```{r}
+elastic_net <- cv.glmnet(X_train, 
+                         y_train, 
+                         alpha = 0.5, 
+                         type.measure = "mse", 
+                         family = "gaussian", 
+                         nfolds = 10)
+
+best_lambda_en <- elastic_net$lambda.min ; best_lambda_en 
+```
+
+```{r}
+pred_en <- predict(elastic_net, s = best_lambda_en, newx = X_test)
+mse_en <- mean((y_test - pred_en)^2)
+rsq_en <- 1 - sum((y_test - pred_en)^2) / sum((y_test - mean(y_test))^2)
+```
+
+# Non-Linear Relationship Model
+
+## Regresi Polinomial
+```{r}
+# Mean Squared Error Function
+mse <- function(model, data) {
+  preds <- predict(model, newdata = data)
+  mean((data$Y - preds)^2)
+}
+
+# Cross-Validation Function for Polynomial Regression
+cv_error_poly <- function(degree, data, folds = 5) {
+  n <- nrow(data)
+  set.seed(123)
+  folds_index <- sample(rep(1:folds, length.out = n))
+  errors <- numeric(folds)
+  
+  for (i in 1:folds) {
+    train_data <- data[folds_index != i, ]
+    test_data  <- data[folds_index == i, ]
+    
+    formula_poly <- as.formula(paste("Y ~", paste(paste0("poly(X", 1:10, ", ", degree, ")"), collapse = " + ")))
+    
+    model <- lm(formula_poly, data = train_data)
+    
+    errors[i] <- sqrt(mse(model, test_data))
+  }
+  
+  return(mean(errors))
+}
+
+# Perform Cross-Validation for Different Polynomial Degrees
+degrees <- 1:5
+cv_errors <- sapply(degrees, function(degree) cv_error_poly(degree, train_data))
+best_degree <- degrees[which.min(cv_errors)]
+
+# Create Results Table
+results_table <- data.frame(
+  Derajat = degrees,
+  RMSE = cv_errors,
+  Derajat_Terbaik = ifelse(degrees == best_degree, "Yes", "No")
+)
+
+# Print Table
+print(results_table, row.names = FALSE)
+```
+
+```{r}
+degree <- 1 #misal 1
+formula_poly <- as.formula(paste("Y ~", paste(paste0("poly(", names(train_data)[-1], ", ", degree, ")"), collapse = " + ")))
+
+poly_model <- lm(formula_poly, data = train_data)
+summary(poly_model)
+```
+
+```{r}
+pred_poly <- predict(poly_model, test_data)
+mse_poly <- mean((y_test - pred_poly)^2)
+rsq_poly <- 1 - sum((y_test - pred_poly)^2) / sum((y_test - mean(y_test))^2)
+```
+
+## Fungsi Tangga 
+```{r}
+# Load necessary library
+library(dplyr)
+
+# Mean Squared Error Function
+mse <- function(model, data) {
+  preds <- predict(model, newdata = data)
+  mean((data$Y - preds)^2)
+}
+
+# Cross-Validation Function for Piecewise Constant Regression
+cv_error_piecewise <- function(n_bins, data, folds = 5) {
+  n <- nrow(data)
+  set.seed(123)
+  folds_index <- sample(rep(1:folds, length.out = n))
+  errors <- numeric(folds)
+  
+  for (i in 1:folds) {
+    train_data <- data[folds_index != i, ]
+    test_data  <- data[folds_index == i, ]
+    
+    # Discretize each X variable into n_bins categories
+    for (j in 1:10) {
+      train_data[[paste0("X", j, "_bin")]] <- cut(train_data[[paste0("X", j)]], breaks = n_bins, labels = FALSE)
+      test_data[[paste0("X", j, "_bin")]] <- cut(test_data[[paste0("X", j)]], breaks = n_bins, labels = FALSE)
+    }
+    
+    # Build the formula
+    formula_piecewise <- as.formula(paste("Y ~", paste(paste0("factor(X", 1:10, "_bin)"), collapse = " + ")))
+    
+    model <- lm(formula_piecewise, data = train_data)
+    
+    errors[i] <- sqrt(mse(model, test_data))
+  }
+  
+  return(mean(errors))
+}
+
+# Perform Cross-Validation for Different Number of Bins
+bins <- 2:5
+cv_errors <- sapply(bins, function(n_bins) cv_error_piecewise(n_bins, train_data))
+best_bins <- bins[which.min(cv_errors)]
+
+# Create Results Table
+results_table <- data.frame(
+  Jumlah_Interval = bins,
+  RMSE = cv_errors,
+  Interval_Terbaik = ifelse(bins == best_bins, "Yes", "No")
+)
+
+# Print Table
+print(results_table, row.names = FALSE)
+```
+
+
+```{r}
+# Train final model with best_bins
+for (j in 1:10) {
+  train_data[[paste0("X", j, "_bin")]] <- cut(train_data[[paste0("X", j)]], breaks = best_bins, labels = FALSE)
+  test_data[[paste0("X", j, "_bin")]] <- cut(test_data[[paste0("X", j)]], breaks = best_bins, labels = FALSE)
+}
+
+formula_piecewise <- as.formula(paste("Y ~", paste(paste0("factor(X", 1:10, "_bin)"), collapse = " + ")))
+piecewise_model <- lm(formula_piecewise, data = train_data)
+
+# Model summary
+summary(piecewise_model)
+```
+
+
+```{r}
+pred_piecewise <- predict(piecewise_model, test_data)
+mse_piecewise <- mean((y_test - pred_piecewise)^2)
+rsq_piecewise <- 1 - sum((y_test - pred_piecewise)^2) / sum((y_test - mean(y_test))^2)
+```
+
+## Regresi Spline
+```{r}
+# Load library
+library(splines)
+
+# Mean Squared Error Function
+mse <- function(model, data) {
+  preds <- predict(model, newdata = data)
+  mean((data$Y - preds)^2)
+}
+
+# Cross-Validation Function for Spline Regression
+cv_error_spline <- function(n_knots, data, folds = 5) {
+  n <- nrow(data)
+  set.seed(123)
+  folds_index <- sample(rep(1:folds, length.out = n))
+  errors <- numeric(folds)
+  
+  for (i in 1:folds) {
+    train_data <- data[folds_index != i, ]
+    test_data  <- data[folds_index == i, ]
+    
+    # Buat formula regresi spline dengan bs() (basis spline)
+    formula_spline <- as.formula(paste("Y ~", paste(paste0("bs(X", 1:10, ", df = ", n_knots, ")"), collapse = " + ")))
+    
+    model <- lm(formula_spline, data = train_data)
+    
+    errors[i] <- sqrt(mse(model, test_data))
+  }
+  
+  return(mean(errors))
+}
+
+# Perform Cross-Validation for Different Number of Knots
+knots <- 2:5
+cv_errors_spline <- sapply(knots, function(n_knots) cv_error_spline(n_knots, train_data))
+best_knots <- knots[which.min(cv_errors_spline)]
+
+# Create Results Table
+results_table <- data.frame(
+  Jumlah_Knots = knots,
+  RMSE = cv_errors_spline,
+  Knots_Terbaik = ifelse(knots == best_knots, "Yes", "No")
+)
+
+# Print Table
+print(results_table, row.names = FALSE)
+
+```
+
+```{r}
+# Train final spline model
+formula_spline <- as.formula(paste("Y ~", paste(paste0("bs(X", 1:10, ", df = ", best_knots, ")"), collapse = " + ")))
+
+spline_model <- lm(formula_spline, data = train_data)
+
+# Model summary
+summary(spline_model)
+```
+```{r}
+pred_spline <- predict(spline_model, test_data)
+mse_spline <- mean((y_test - pred_spline)^2)
+rsq_spline <- 1 - sum((y_test - pred_spline)^2) / sum((y_test - mean(y_test))^2)
+```
+## GAM
+```{r}
+library(mgcv)
+
+formula_gam <- as.formula(paste("Y ~", paste(paste0("s(X", 1:10, ", k = 5)"), collapse = " + ")))
+gam_model <- gam(formula_gam, data = train_data)
+summary(gam_model)
+```
+
+
+```{r}
+pred_gam <- predict(gam_model, test_data)
+mse_gam <- mean((y_test - pred_gam)^2)
+rsq_gam <- 1 - sum((y_test - pred_gam)^2) / sum((y_test - mean(y_test))^2)
+```
+
+# Machine Learning Model
