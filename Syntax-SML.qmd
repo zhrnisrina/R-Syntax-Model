@@ -15,30 +15,42 @@ library(MASS)
 ```{r}
 set.seed(50)
 
-n <- 200  
-p <- 10
+n <- 200  # Jumlah observasi
+p <- 10   # Jumlah prediktor
 
-# Generate covariate matrix
-cov <- diag(p) * (1.10^2)
+# Generate covariate matrix dengan korelasi
+library(MASS)
+cov_matrix <- diag(p) * 1.1^2 + matrix(0.3, p, p)  # Menambahkan korelasi antar variabel
 mu <- rep(2.5, p)
-X <- mvrnorm(n, mu, cov)
+X <- mvrnorm(n, mu, cov_matrix)
 X <- data.frame(X)
 colnames(X) <- paste0("X", 1:p)
 
-# Linear & Nonlinear effects
+# Efek linear & nonlinear
 beta <- rep(0, p)
 beta_0 <- 2
 beta[1:5] <- 1.25  # Linear relationship
 beta[6:10] <- 0.6   # Nonlinear relationship
 
-# Error term
-error <- rnorm(n, 0, 1.5)
+# Tambahkan interaksi antar variabel
+interact_term <- X$X1 * X$X2 + X$X3 * X$X4
 
-# Create Y with both linear and nonlinear effects
+# Tambahkan efek polinomial
+poly_term <- X$X5^2 + X$X6^3
+
+# Heteroskedastisitas: error tergantung pada X
+error <- rnorm(n, 0, 1.5 * abs(X$X1))
+
+# Buat Y dengan semua efek
 Y <- beta_0 + as.matrix(X[, 1:5]) %*% beta[1:5] + 
-     sin(as.matrix(X[, 6:10]) %*% beta[6:10]) + error
+     sin(as.matrix(X[, 6:10]) %*% beta[6:10]) +
+     0.8 * interact_term + 0.5 * poly_term + error
 
 data <- data.frame(Y, X)
+
+# Tambahkan beberapa outlier untuk menguji ketahanan model
+outlier_idx <- sample(1:n, size = 5)
+data$Y[outlier_idx] <- data$Y[outlier_idx] + rnorm(5, mean = 10, sd = 5)
 
 library(dplyr)
 glimpse(data)
@@ -69,6 +81,22 @@ mse_lm <- mean((y_test - pred_lm)^2)
 rsq_lm <- 1 - sum((y_test - pred_lm)^2) / sum((y_test - mean(y_test))^2)
 ```
 
+```{r}
+library(ggplot2)
+
+plot_data <- data.frame(Actual = test_data$Y, Predicted = pred_lm)
+
+ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 1.5, color = "black") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Nilai Aktual",
+       y = "Nilai Prediksi") +
+  annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
+           label = paste("R² =", round(rsq_lm, 3)), hjust = 0, size = 5, color = "black") +
+  theme_minimal()
+```
+
+
 # Subset Selection Model
 
 ## Forward Selection
@@ -92,6 +120,20 @@ mse_forward <- mean((y_test - pred_forward)^2)
 rsq_forward <- 1 - sum((y_test - pred_forward)^2) / sum((y_test - mean(y_test))^2)
 ```
 
+```{r}
+plot_data <- data.frame(Actual = test_data$Y, Predicted = pred_forward)
+
+ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 1.5, color = "black") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Nilai Aktual",
+       y = "Nilai Prediksi") +
+  annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
+           label = paste("R² =", round(rsq_forward, 3)), hjust = 0, size = 5, color = "black") +
+  theme_minimal()
+```
+
+
 ## Backward Elimination
 ```{r}
 step_backward <- stepAIC(full_model, direction = "backward", trace = FALSE)
@@ -103,6 +145,21 @@ pred_backward <- predict(step_backward, test_data)
 mse_backward <- mean((y_test - pred_backward)^2)
 rsq_backward <- 1 - sum((y_test - pred_backward)^2) / sum((y_test - mean(y_test))^2)
 ```
+
+
+```{r}
+plot_data <- data.frame(Actual = test_data$Y, Predicted = pred_backward)
+
+ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 1.5, color = "black") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Nilai Aktual",
+       y = "Nilai Prediksi") +
+  annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
+           label = paste("R² =", round(rsq_backward, 3)), hjust = 0, size = 5, color = "black") +
+  theme_minimal()
+```
+
 
 ## Stepwise Regression
 ```{r}
@@ -116,6 +173,20 @@ pred_stepwise <- predict(step_stepwise, test_data)
 mse_stepwise <- mean((y_test - pred_stepwise)^2)
 rsq_stepwise <- 1 - sum((y_test - pred_stepwise)^2) / sum((y_test - mean(y_test))^2)
 ```
+
+```{r}
+plot_data <- data.frame(Actual = test_data$Y, Predicted = pred_stepwise)
+
+ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 1.5, color = "black") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Nilai Aktual",
+       y = "Nilai Prediksi") +
+  annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
+           label = paste("R² =", round(rsq_stepwise, 3)), hjust = 0, size = 5, color = "black") +
+  theme_minimal()
+```
+
 
 ## Best-Subset Selection
 ```{r}
@@ -138,6 +209,20 @@ mse_best_subset <- mean((y_test - pred_best_subset)^2)
 rsq_best_subset <- 1 - sum((y_test - pred_best_subset)^2) / sum((y_test - mean(y_test))^2)
 ```
 
+```{r}
+plot_data <- data.frame(Actual = test_data$Y, Predicted = pred_best_subset)
+
+ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 1.5, color = "black") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Nilai Aktual",
+       y = "Nilai Prediksi") +
+  annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
+           label = paste("R² =", round(rsq_best_subset, 3)), hjust = 0, size = 5, color = "black") +
+  theme_minimal()
+```
+
+
 # Shrinkage Methods
 
 ## Ridge Regression
@@ -158,10 +243,29 @@ best_lambda_ridge <- ridge$lambda.min ; best_lambda_ridge
 ```
 
 ```{r}
+plot(ridge)
+```
+
+```{r}
 pred_ridge <- predict(ridge, s = best_lambda_ridge, newx = X_test)
 mse_ridge <- mean((y_test - pred_ridge)^2)
 rsq_ridge <- 1 - sum((y_test - pred_ridge)^2) / sum((y_test - mean(y_test))^2)
 ```
+
+```{r}
+pred_ridge <- as.vector(predict(ridge, s = best_lambda_ridge, newx = X_test))
+plot_data <- data.frame(Actual = test_data$Y, Predicted = pred_ridge)
+
+ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 1.5, color = "black") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Nilai Aktual",
+       y = "Nilai Prediksi") +
+  annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
+           label = paste("R² =", round(rsq_ridge, 3)), hjust = 0, size = 5, color = "black") +
+  theme_minimal()
+```
+
 
 ## LASSO Regression
 ```{r}
@@ -174,11 +278,28 @@ lasso <- cv.glmnet(X_train,
 
 best_lambda_lasso <- lasso$lambda.min ; best_lambda_lasso
 ```
+```{r}
+plot(lasso)
+```
 
 ```{r}
 pred_lasso <- predict(lasso, s = best_lambda_lasso, newx = X_test)
 mse_lasso <- mean((y_test - pred_lasso)^2)
 rsq_lasso <- 1 - sum((y_test - pred_lasso)^2) / sum((y_test - mean(y_test))^2)
+```
+
+```{r}
+pred_lasso <- as.vector(predict(ridge, s = best_lambda_lasso, newx = X_test))
+plot_data <- data.frame(Actual = test_data$Y, Predicted = pred_lasso)
+
+ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 1.5, color = "black") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Nilai Aktual",
+       y = "Nilai Prediksi") +
+  annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
+           label = paste("R² =", round(rsq_lasso, 3)), hjust = 0, size = 5, color = "black") +
+  theme_minimal()
 ```
 
 ## Elastic Net
@@ -194,9 +315,28 @@ best_lambda_en <- elastic_net$lambda.min ; best_lambda_en
 ```
 
 ```{r}
+plot(elastic_net)
+```
+
+
+```{r}
 pred_en <- predict(elastic_net, s = best_lambda_en, newx = X_test)
 mse_en <- mean((y_test - pred_en)^2)
 rsq_en <- 1 - sum((y_test - pred_en)^2) / sum((y_test - mean(y_test))^2)
+```
+
+```{r}
+pred_en <- as.vector(predict(ridge, s = best_lambda_en, newx = X_test))
+plot_data <- data.frame(Actual = test_data$Y, Predicted = pred_lasso)
+
+ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 1.5, color = "black") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Nilai Aktual",
+       y = "Nilai Prediksi") +
+  annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
+           label = paste("R² =", round(rsq_en, 3)), hjust = 0, size = 5, color = "black") +
+  theme_minimal()
 ```
 
 # Non-Linear Relationship Model
@@ -255,9 +395,38 @@ summary(poly_model)
 ```
 
 ```{r}
+x_var <- "X1"
+plot_data <- data.frame(X = train_data[[x_var]],  Y = train_data$Y)
+
+plot_data$Predicted_Y <- predict(poly_model, newdata = train_data)
+
+ggplot(plot_data, aes(x = X, y = Y)) +
+  geom_point(alpha = 0.5, color = "blue") +  
+  geom_line(aes(y = Predicted_Y), color = "black", size = 1) +
+  labs(x = x_var,
+       y = "Y") +
+  theme_minimal()
+
+```
+
+
+```{r}
 pred_poly <- predict(poly_model, test_data)
 mse_poly <- mean((y_test - pred_poly)^2)
 rsq_poly <- 1 - sum((y_test - pred_poly)^2) / sum((y_test - mean(y_test))^2)
+```
+
+```{r}
+plot_data <- data.frame(Actual = test_data$Y, Predicted = pred_poly)
+
+ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 1.5, color = "black") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Nilai Aktual",
+       y = "Nilai Prediksi") +
+  annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
+           label = paste("R² =", round(rsq_poly, 3)), hjust = 0, size = 5, color = "black") +
+  theme_minimal()
 ```
 
 ## Fungsi Tangga 
@@ -331,11 +500,38 @@ piecewise_model <- lm(formula_piecewise, data = train_data)
 summary(piecewise_model)
 ```
 
+```{r}
+x_var <- "X1"
+plot_data <- data.frame(X = train_data[[x_var]],  Y = train_data$Y)
+
+plot_data$Predicted_Y <- predict(piecewise_model, newdata = train_data)
+
+ggplot(plot_data, aes(x = X, y = Y)) +
+  geom_point(alpha = 0.5, color = "blue") +  
+  geom_line(aes(y = Predicted_Y), color = "black", size = 1) +
+  labs(x = x_var,
+       y = "Y") +
+  theme_minimal()
+```
+
 
 ```{r}
 pred_piecewise <- predict(piecewise_model, test_data)
 mse_piecewise <- mean((y_test - pred_piecewise)^2)
 rsq_piecewise <- 1 - sum((y_test - pred_piecewise)^2) / sum((y_test - mean(y_test))^2)
+```
+
+```{r}
+plot_data <- data.frame(Actual = test_data$Y, Predicted = pred_piecewise)
+
+ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 1.5, color = "black") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Nilai Aktual",
+       y = "Nilai Prediksi") +
+  annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
+           label = paste("R² =", round(rsq_piecewise, 3)), hjust = 0, size = 5, color = "black") +
+  theme_minimal()
 ```
 
 ## Regresi Spline
@@ -399,11 +595,40 @@ spline_model <- lm(formula_spline, data = train_data)
 # Model summary
 summary(spline_model)
 ```
+
+```{r}
+x_var <- "X1"
+plot_data <- data.frame(X = train_data[[x_var]],  Y = train_data$Y)
+
+plot_data$Predicted_Y <- predict(spline_model, newdata = train_data)
+
+ggplot(plot_data, aes(x = X, y = Y)) +
+  geom_point(alpha = 0.5, color = "blue") +  
+  geom_line(aes(y = Predicted_Y), color = "black", size = 1) +
+  labs(x = x_var,
+       y = "Y") +
+  theme_minimal()
+```
+
 ```{r}
 pred_spline <- predict(spline_model, test_data)
 mse_spline <- mean((y_test - pred_spline)^2)
 rsq_spline <- 1 - sum((y_test - pred_spline)^2) / sum((y_test - mean(y_test))^2)
 ```
+
+```{r}
+plot_data <- data.frame(Actual = test_data$Y, Predicted = pred_spline)
+
+ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 1.5, color = "black") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Nilai Aktual",
+       y = "Nilai Prediksi") +
+  annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
+           label = paste("R² =", round(rsq_spline, 3)), hjust = 0, size = 5, color = "black") +
+  theme_minimal()
+```
+
 ## GAM
 ```{r}
 library(mgcv)
@@ -418,6 +643,19 @@ summary(gam_model)
 pred_gam <- predict(gam_model, test_data)
 mse_gam <- mean((y_test - pred_gam)^2)
 rsq_gam <- 1 - sum((y_test - pred_gam)^2) / sum((y_test - mean(y_test))^2)
+```
+
+```{r}
+plot_data <- data.frame(Actual = test_data$Y, Predicted = pred_gam)
+
+ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 1.5, color = "black") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Nilai Aktual",
+       y = "Nilai Prediksi") +
+  annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
+           label = paste("R² =", round(rsq_gam, 3)), hjust = 0, size = 5, color = "black") +
+  theme_minimal()
 ```
 
 # Machine Learning Model
@@ -631,6 +869,11 @@ nn_model <- nnet(Y ~ ., data = train_data,
                  maxit = 500)    # Iterasi training
 
 summary(nn_model)
+```
+
+```{r}
+library(NeuralNetTools)
+plotnet(nn_model)
 ```
 
 
