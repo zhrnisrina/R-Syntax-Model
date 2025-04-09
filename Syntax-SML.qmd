@@ -1,5 +1,5 @@
 ---
-title: "Syntax Model"
+title: "Supervised Regression"
 format: 
   html:
     embed-resources: true
@@ -18,8 +18,7 @@ set.seed(50)
 n <- 200  # Jumlah observasi
 p <- 10   # Jumlah prediktor
 
-# Generate covariate matrix dengan korelasi
-library(MASS)
+# Membangkitkan covariate matrix dengan korelasi
 cov_matrix <- diag(p) * 1.1^2 + matrix(0.3, p, p)  # Menambahkan korelasi antar variabel
 mu <- rep(2.5, p)
 X <- mvrnorm(n, mu, cov_matrix)
@@ -32,10 +31,10 @@ beta_0 <- 2
 beta[1:5] <- 1.25  # Linear relationship
 beta[6:10] <- 0.6   # Nonlinear relationship
 
-# Tambahkan interaksi antar variabel
+# Interaksi antar variabel
 interact_term <- X$X1 * X$X2 + X$X3 * X$X4
 
-# Tambahkan efek polinomial
+# Efek polinomial
 poly_term <- X$X5^2 + X$X6^3
 
 # Heteroskedastisitas: error tergantung pada X
@@ -92,7 +91,7 @@ ggplot(plot_data, aes(x = Actual, y = Predicted)) +
   labs(x = "Nilai Aktual",
        y = "Nilai Prediksi") +
   annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
-           label = paste("R² =", round(rsq_lm, 3)), hjust = 0, size = 5, color = "black") +
+           label = bquote(R^2 == .(round(rsq_lm, 3))), hjust = 0, size = 5, color = "black") +
   theme_minimal()
 ```
 
@@ -129,7 +128,7 @@ ggplot(plot_data, aes(x = Actual, y = Predicted)) +
   labs(x = "Nilai Aktual",
        y = "Nilai Prediksi") +
   annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
-           label = paste("R² =", round(rsq_forward, 3)), hjust = 0, size = 5, color = "black") +
+           label = bquote(R^2 == .(round(rsq_forward, 3))), hjust = 0, size = 5, color = "black") +
   theme_minimal()
 ```
 
@@ -156,7 +155,7 @@ ggplot(plot_data, aes(x = Actual, y = Predicted)) +
   labs(x = "Nilai Aktual",
        y = "Nilai Prediksi") +
   annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
-           label = paste("R² =", round(rsq_backward, 3)), hjust = 0, size = 5, color = "black") +
+           label = bquote(R^2 == .(round(rsq_backward, 3))), hjust = 0, size = 5, color = "black") +
   theme_minimal()
 ```
 
@@ -183,7 +182,7 @@ ggplot(plot_data, aes(x = Actual, y = Predicted)) +
   labs(x = "Nilai Aktual",
        y = "Nilai Prediksi") +
   annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
-           label = paste("R² =", round(rsq_stepwise, 3)), hjust = 0, size = 5, color = "black") +
+           label = bquote(R^2 == .(round(rsq_stepwise, 3))), hjust = 0, size = 5, color = "black") +
   theme_minimal()
 ```
 
@@ -218,7 +217,7 @@ ggplot(plot_data, aes(x = Actual, y = Predicted)) +
   labs(x = "Nilai Aktual",
        y = "Nilai Prediksi") +
   annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
-           label = paste("R² =", round(rsq_best_subset, 3)), hjust = 0, size = 5, color = "black") +
+           label = bquote(R^2 == .(round(rsq_best_subset, 3))), hjust = 0, size = 5, color = "black") +
   theme_minimal()
 ```
 
@@ -262,7 +261,7 @@ ggplot(plot_data, aes(x = Actual, y = Predicted)) +
   labs(x = "Nilai Aktual",
        y = "Nilai Prediksi") +
   annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
-           label = paste("R² =", round(rsq_ridge, 3)), hjust = 0, size = 5, color = "black") +
+           label = bquote(R^2 == .(round(rsq_ridge, 3))), hjust = 0, size = 5, color = "black") +
   theme_minimal()
 ```
 
@@ -298,7 +297,7 @@ ggplot(plot_data, aes(x = Actual, y = Predicted)) +
   labs(x = "Nilai Aktual",
        y = "Nilai Prediksi") +
   annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
-           label = paste("R² =", round(rsq_lasso, 3)), hjust = 0, size = 5, color = "black") +
+           label = bquote(R^2 == .(round(rsq_lasso, 3))), hjust = 0, size = 5, color = "black") +
   theme_minimal()
 ```
 
@@ -335,7 +334,7 @@ ggplot(plot_data, aes(x = Actual, y = Predicted)) +
   labs(x = "Nilai Aktual",
        y = "Nilai Prediksi") +
   annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
-           label = paste("R² =", round(rsq_en, 3)), hjust = 0, size = 5, color = "black") +
+           label = bquote(R^2 == .(round(rsq_en, 3))), hjust = 0, size = 5, color = "black") +
   theme_minimal()
 ```
 
@@ -387,7 +386,7 @@ print(results_table, row.names = FALSE)
 ```
 
 ```{r}
-degree <- 1 #misal 1
+degree <- 3 
 formula_poly <- as.formula(paste("Y ~", paste(paste0("poly(", names(train_data)[-1], ", ", degree, ")"), collapse = " + ")))
 
 poly_model <- lm(formula_poly, data = train_data)
@@ -395,18 +394,55 @@ summary(poly_model)
 ```
 
 ```{r}
-x_var <- "X1"
-plot_data <- data.frame(X = train_data[[x_var]],  Y = train_data$Y)
+# Fungsi untuk menghitung modus
+get_mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
 
-plot_data$Predicted_Y <- predict(poly_model, newdata = train_data)
+# Perbaikan fungsi plot_partial_poly yang lebih fleksibel
+plot_partial_poly <- function(var, model, data, degree = 3) {
+  x_seq <- seq(min(data[[var]]), max(data[[var]]), length.out = 100)
+  
+  # Ambil semua predictor dari model
+  model_vars <- all.vars(formula(model))[-1]  # kecuali Y
+  predictor_vars <- setdiff(model_vars, "Y")
+  
+  # Inisialisasi new_data dengan nilai median / modus
+  new_data <- data.frame(matrix(nrow = 100, ncol = length(predictor_vars)))
+  names(new_data) <- predictor_vars
+  
+  for (v in predictor_vars) {
+    if (is.numeric(data[[v]])) {
+      new_data[[v]] <- rep(median(data[[v]], na.rm = TRUE), 100)
+    } else {
+      new_data[[v]] <- rep(get_mode(data[[v]]), 100)
+    }
+  }
+  
+  # Ganti variabel yang sedang diplot dengan x_seq
+  new_data[[var]] <- x_seq
+  
+  # Prediksi
+  preds <- predict(model, newdata = new_data)
+  
+  # Plot
+  ggplot(data.frame(x = x_seq, y = preds), aes(x = x, y = y)) +
+    geom_line(color = "darkgreen", size = 1) +
+    labs(title = paste("Partial Effect:", var),
+         x = var, y = "Predicted Y") +
+    theme_minimal()
+}
 
-ggplot(plot_data, aes(x = X, y = Y)) +
-  geom_point(alpha = 0.5, color = "blue") +  
-  geom_line(aes(y = Predicted_Y), color = "black", size = 1) +
-  labs(x = x_var,
-       y = "Y") +
-  theme_minimal()
+# Plot untuk semua variabel
+plots_poly <- lapply(paste0("X", 1:10), plot_partial_poly,
+                     model = poly_model,
+                     data = train_data,
+                     degree = degree)
 
+# Tampilkan grid plot
+library(patchwork)
+wrap_plots(plots_poly, ncol = 4)
 ```
 
 
@@ -425,7 +461,7 @@ ggplot(plot_data, aes(x = Actual, y = Predicted)) +
   labs(x = "Nilai Aktual",
        y = "Nilai Prediksi") +
   annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
-           label = paste("R² =", round(rsq_poly, 3)), hjust = 0, size = 5, color = "black") +
+           label = bquote(R^2 == .(round(rsq_poly, 3))), hjust = 0, size = 5, color = "black") +
   theme_minimal()
 ```
 
@@ -499,21 +535,54 @@ piecewise_model <- lm(formula_piecewise, data = train_data)
 # Model summary
 summary(piecewise_model)
 ```
-
 ```{r}
-x_var <- "X1"
-plot_data <- data.frame(X = train_data[[x_var]],  Y = train_data$Y)
+# Hitung median dari masing-masing variabel X1-X10
+median_vals <- sapply(train_data[paste0("X", 1:10)], median, na.rm = TRUE)
 
-plot_data$Predicted_Y <- predict(piecewise_model, newdata = train_data)
+# Fungsi visualisasi partial effect pada model piecewise (binning)
+plot_partial_piecewise <- function(var, model, data, bins = best_bins) {
+  # Batas bin yang digunakan
+  breaks <- quantile(data[[var]], probs = seq(0, 1, length.out = bins + 1), na.rm = TRUE)
 
-ggplot(plot_data, aes(x = X, y = Y)) +
-  geom_point(alpha = 0.5, color = "blue") +  
-  geom_line(aes(y = Predicted_Y), color = "black", size = 1) +
-  labs(x = x_var,
-       y = "Y") +
-  theme_minimal()
+  # Gunakan titik tengah tiap bin untuk prediksi
+  bin_midpoints <- (head(breaks, -1) + tail(breaks, -1)) / 2
+  
+  # Buat data baru: semua median, hanya 1 variabel pakai titik tengah bin
+  new_data <- as.data.frame(t(replicate(length(bin_midpoints), median_vals)))
+  names(new_data) <- paste0("X", 1:10)
+  new_data[[var]] <- bin_midpoints
+  
+  # Transformasi ke bin seperti di training
+  for (j in 1:10) {
+    new_data[[paste0("X", j, "_bin")]] <- cut(new_data[[paste0("X", j)]],
+                                              breaks = breaks,
+                                              labels = FALSE,
+                                              include.lowest = TRUE)
+    new_data[[paste0("X", j, "_bin")]] <- factor(new_data[[paste0("X", j, "_bin")]])
+  }
+  
+  # Prediksi
+  preds <- predict(model, newdata = new_data)
+  
+  # Plot
+  ggplot(data.frame(x = bin_midpoints, y = preds), aes(x = x, y = y)) +
+    geom_line(color = "tomato", size = 1) +
+    geom_point(color = "tomato") +
+    labs(title = paste("Partial Effect:", var),
+         x = var, y = "Predicted Y") +
+    theme_minimal()
+}
+
+# Plot untuk semua variabel
+plots_bin <- lapply(paste0("X", 1:10), plot_partial_piecewise,
+                    model = piecewise_model,
+                    data = train_data,
+                    bins = best_bins)
+
+# Tampilkan grid plot
+library(patchwork)
+wrap_plots(plots_bin, ncol = 4)
 ```
-
 
 ```{r}
 pred_piecewise <- predict(piecewise_model, test_data)
@@ -530,7 +599,7 @@ ggplot(plot_data, aes(x = Actual, y = Predicted)) +
   labs(x = "Nilai Aktual",
        y = "Nilai Prediksi") +
   annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
-           label = paste("R² =", round(rsq_piecewise, 3)), hjust = 0, size = 5, color = "black") +
+           label = bquote(R^2 == .(round(rsq_piecewise, 3))), hjust = 0, size = 5, color = "black") +
   theme_minimal()
 ```
 
@@ -541,13 +610,13 @@ library(splines)
 
 
 ```{r}
-# Mean Squared Error Function
+# MSE Function
 mse <- function(model, data) {
   preds <- predict(model, newdata = data)
   mean((data$Y - preds)^2)
 }
 
-# Cross-Validation Function for Spline Regression
+# Cross-Validation Function 
 cv_error_spline <- function(n_knots, data, folds = 5) {
   n <- nrow(data)
   set.seed(123)
@@ -557,20 +626,42 @@ cv_error_spline <- function(n_knots, data, folds = 5) {
   for (i in 1:folds) {
     train_data <- data[folds_index != i, ]
     test_data  <- data[folds_index == i, ]
+
+    X_train_spline <- NULL
+    X_test_spline  <- NULL
     
-    # Buat formula regresi spline dengan bs() (basis spline)
-    formula_spline <- as.formula(paste("Y ~", paste(paste0("bs(X", 1:10, ", df = ", n_knots, ")"), collapse = " + ")))
-    
-    model <- lm(formula_spline, data = train_data)
-    
-    errors[i] <- sqrt(mse(model, test_data))
+    for (j in 1:10) {
+      varname <- paste0("X", j)
+      x_train <- train_data[[varname]]
+      x_test  <- test_data[[varname]]
+      
+      # Gabungkan data untuk boundary
+      x_all <- c(x_train, x_test)
+      bknots <- range(x_all)
+
+      # Buat basis dari train dengan boundary pasti
+      spline_basis_obj <- bs(x_train, df = n_knots, Boundary.knots = bknots)
+      spline_basis_test <- predict(spline_basis_obj, newx = x_test)
+      
+      colnames(spline_basis_obj) <- paste0(varname, "_s", 1:ncol(spline_basis_obj))
+      colnames(spline_basis_test) <- paste0(varname, "_s", 1:ncol(spline_basis_test))
+
+      X_train_spline <- cbind(X_train_spline, spline_basis_obj)
+      X_test_spline  <- cbind(X_test_spline, spline_basis_test)
+    }
+
+    train_df <- data.frame(Y = train_data$Y, X_train_spline)
+    test_df  <- data.frame(Y = test_data$Y, X_test_spline)
+
+    model <- lm(Y ~ ., data = train_df)
+    errors[i] <- sqrt(mse(model, test_df))
   }
   
   return(mean(errors))
 }
 
 # Perform Cross-Validation for Different Number of Knots
-knots <- 2:5
+knots <- 3:5
 cv_errors_spline <- sapply(knots, function(n_knots) cv_error_spline(n_knots, train_data))
 best_knots <- knots[which.min(cv_errors_spline)]
 
@@ -597,17 +688,39 @@ summary(spline_model)
 ```
 
 ```{r}
-x_var <- "X1"
-plot_data <- data.frame(X = train_data[[x_var]],  Y = train_data$Y)
+# Data untuk prediksi partial (menggunakan nilai tengah untuk variabel lain)
+median_vals <- apply(train_data[, paste0("X", 1:10)], 2, median)
 
-plot_data$Predicted_Y <- predict(spline_model, newdata = train_data)
+# Fungsi untuk plot partial effect setiap variabel Xj
+plot_partial_spline <- function(var, model, data, df) {
+  x_seq <- seq(min(data[[var]]), max(data[[var]]), length.out = 100)
+  
+  # Buat data baru dengan semua median, hanya 1 variabel berubah
+  new_data <- as.data.frame(t(replicate(100, median_vals)))
+  names(new_data) <- paste0("X", 1:10)
+  new_data[[var]] <- x_seq
+  
+  # Prediksi
+  preds <- predict(model, newdata = new_data)
+  
+  # Plot
+  ggplot(data.frame(x = x_seq, y = preds), aes(x = x, y = y)) +
+    geom_line(color = "steelblue", size = 1) +
+    labs(title = paste("Partial Effect:", var),
+         x = var, y = "Predicted Y") +
+    theme_minimal()
+}
 
-ggplot(plot_data, aes(x = X, y = Y)) +
-  geom_point(alpha = 0.5, color = "blue") +  
-  geom_line(aes(y = Predicted_Y), color = "black", size = 1) +
-  labs(x = x_var,
-       y = "Y") +
-  theme_minimal()
+# Plot semua variabel (bisa dipilih sebagian)
+plots <- lapply(paste0("X", 1:10), plot_partial_spline,
+                model = spline_model,
+                data = train_data,
+                df = best_knots)
+
+# Tampilkan grid plot
+library(patchwork)
+wrap_plots(plots, ncol = 4)
+
 ```
 
 ```{r}
@@ -625,7 +738,7 @@ ggplot(plot_data, aes(x = Actual, y = Predicted)) +
   labs(x = "Nilai Aktual",
        y = "Nilai Prediksi") +
   annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
-           label = paste("R² =", round(rsq_spline, 3)), hjust = 0, size = 5, color = "black") +
+           label = bquote(R^2 == .(round(rsq_spline, 3))), hjust = 0, size = 5, color = "black") +
   theme_minimal()
 ```
 
@@ -654,7 +767,7 @@ ggplot(plot_data, aes(x = Actual, y = Predicted)) +
   labs(x = "Nilai Aktual",
        y = "Nilai Prediksi") +
   annotate("text", x = min(plot_data$Actual), y = max(plot_data$Predicted), 
-           label = paste("R² =", round(rsq_gam, 3)), hjust = 0, size = 5, color = "black") +
+           label = bquote(R^2 == .(round(rsq_gam, 3))), hjust = 0, size = 5, color = "black") +
   theme_minimal()
 ```
 
@@ -786,12 +899,6 @@ rsq_rf <- 1 - sum((y_test - pred_rf)^2) / sum((y_test - mean(y_test))^2)
 ```{r}
 # Plot feature importance
 varImpPlot(rf_model, main = "Feature Importance in Random Forest")
-```
-
-## AdaBoost (Klasifikasi)
-```{r}
-library(adabag)
-library(caret)
 ```
 
 ## GBM
